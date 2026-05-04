@@ -1,0 +1,15 @@
+{
+  "name": "VietQR → Wise",
+  "short_name": "VietQR→Wise",
+  "display": "standalone",
+  "start_url": ".",
+  "theme_color": "#111",
+  "background_color": "#fff",
+  "icons": [
+    {
+      "src": "/viet-qr-to-wise/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

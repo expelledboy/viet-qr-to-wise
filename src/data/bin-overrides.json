@@ -1,0 +1,16 @@
+{
+  "_comment": "Manual overrides for BINs that vietqr.io reports without SWIFT but Wise accepts. Verify before sending real money.",
+  "533948": "CITIVNVX",
+  "801011": "NACFVNVH",
+  "970421": "VRBAVNVX",
+  "970434": "IABBVNVX",
+  "970455": "IBKOVNVX",
+  "970456": "IBKOVNVX",
+  "970457": "HVBKVNVX",
+  "970458": "UOVBVNVX",
+  "970462": "KOEXVNVX",
+  "970463": "KOEXVNVX",
+  "970466": "KOEXVNVX",
+  "970467": "KOEXVNVX",
+  "999888": "VBSPVNVX"
+}
