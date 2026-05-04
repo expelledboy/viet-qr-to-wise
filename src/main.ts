@@ -5,6 +5,7 @@ import { lookupBin, type BankLookupResult } from "./lib/banks.mjs";
 import { startScanner, type ScannerHandle } from "./lib/scanner.mjs";
 import { buildWiseSendUrl } from "./lib/wise.mjs";
 import { renderRecipientImage } from "./lib/render.mjs";
+import { extractNameCandidates, prefetchOcr } from "./lib/ocr.mjs";
 
 type View = "scanning" | "parsed" | "error" | "manual";
 
@@ -127,6 +128,15 @@ function handleParsed(data: VietQRData, notice?: string): void {
   state.bank = lookupBin(data.merchantAccount.bankBin);
   state.notice = notice;
   state.view = "parsed";
+  // Warm the OCR chunk in the background so the button feels instant.
+  // Only meaningful when we actually have a captured frame.
+  if (state.capturedFrame) {
+    try {
+      prefetchOcr();
+    } catch {
+      // never let prefetch errors surface
+    }
+  }
   render();
 }
 
@@ -390,6 +400,91 @@ function viewParsed(): HTMLElement {
     setStoredHolder(bin, account, holderInput.value.trim());
   });
   holderRow.appendChild(holderInput);
+
+  // OCR: only when we have a real captured frame and the holder is empty.
+  if (state.capturedFrame && !holderInput.value.trim()) {
+    const ocrFrame = state.capturedFrame;
+    const ocrWrap = el("div", { class: "ocr" });
+    const statusEl = el("div", { class: "ocr-status", style: "display:none" });
+    const chipRow = el("div", { class: "ocr-chip-row", style: "display:none" });
+
+    const showStatus = (text: string, withSpinner: boolean): void => {
+      statusEl.replaceChildren();
+      if (withSpinner) statusEl.appendChild(el("span", { class: "ocr-spinner" }));
+      statusEl.appendChild(el("span", {}, [text]));
+      statusEl.style.display = "";
+    };
+    const hideStatus = (): void => {
+      statusEl.style.display = "none";
+      statusEl.replaceChildren();
+    };
+    const hideChips = (): void => {
+      chipRow.style.display = "none";
+      chipRow.replaceChildren();
+    };
+
+    const ocrBtn = el(
+      "button",
+      { class: "btn ocr-button", type: "button" },
+      ["📷 Read name from card"],
+    ) as HTMLButtonElement;
+
+    ocrBtn.addEventListener("click", () => {
+      ocrBtn.disabled = true;
+      hideChips();
+      showStatus("Reading card…", true);
+      void (async () => {
+        try {
+          const candidates = await extractNameCandidates(ocrFrame);
+          hideStatus();
+          if (candidates.length === 0) {
+            showStatus("No name detected. Type it below.", false);
+            window.setTimeout(hideStatus, 3000);
+            ocrBtn.disabled = false;
+            return;
+          }
+          chipRow.replaceChildren();
+          for (const name of candidates) {
+            const chip = el(
+              "button",
+              { class: "ocr-chip", type: "button" },
+              [name],
+            ) as HTMLButtonElement;
+            chip.addEventListener("click", () => {
+              holderInput.value = name;
+              setStoredHolder(bin, account, name);
+              hideChips();
+              ocrBtn.style.display = "none";
+            });
+            chipRow.appendChild(chip);
+          }
+          const noneLink = el(
+            "button",
+            { class: "ocr-none", type: "button" },
+            ["✗ None of these"],
+          );
+          noneLink.addEventListener("click", () => {
+            hideChips();
+          });
+          chipRow.appendChild(noneLink);
+          chipRow.style.display = "";
+          ocrBtn.disabled = false;
+        } catch (err) {
+          console.error("[ocr] failed", err);
+          hideStatus();
+          showStatus("Couldn't read the card. Type it below.", false);
+          window.setTimeout(hideStatus, 3000);
+          ocrBtn.disabled = false;
+        }
+      })();
+    });
+
+    ocrWrap.appendChild(ocrBtn);
+    ocrWrap.appendChild(statusEl);
+    ocrWrap.appendChild(chipRow);
+    holderRow.appendChild(ocrWrap);
+  }
+
   card.appendChild(holderRow);
 
   // Amount
