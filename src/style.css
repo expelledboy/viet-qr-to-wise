@@ -287,3 +287,43 @@ h2 {
   transition: opacity 0.25s ease;
 }
 .toast--hide { opacity: 0; }
+
+/* --- Warning banner (vietqr-card / wallet-via-vietqr) --- */
+.warn-banner {
+  border: 1px solid #FFC107;
+  background: rgba(255, 193, 7, 0.1);
+  color: #5a4400;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+@media (prefers-color-scheme: dark) {
+  .warn-banner {
+    color: #ffd766;
+    background: rgba(255, 193, 7, 0.12);
+  }
+}
+
+/* --- Technical-info disclosure on error view --- */
+.tech-detail {
+  margin: 0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+.tech-detail summary {
+  cursor: pointer;
+  color: var(--muted, #888);
+}
+.tech-detail__pre {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.8rem;
+}
+@media (prefers-color-scheme: dark) {
+  .tech-detail__pre { background: rgba(255, 255, 255, 0.06); }
+}

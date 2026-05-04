@@ -1,5 +1,6 @@
 import "./style.css";
-import { parseVietQR, VietQRParseError, type VietQRData } from "./lib/vietqr.mjs";
+import { type VietQRData } from "./lib/vietqr.mjs";
+import { classifyQR, type ClassifyResult } from "./lib/classify.mjs";
 import { lookupBin, type BankLookupResult } from "./lib/banks.mjs";
 import { startScanner, type ScannerHandle } from "./lib/scanner.mjs";
 import { buildWiseSendUrl } from "./lib/wise.mjs";
@@ -10,8 +11,10 @@ type View = "scanning" | "parsed" | "error" | "manual";
 interface AppState {
   view: View;
   errorMessage?: string;
+  errorDetail?: string;
   parsed?: VietQRData;
   bank?: BankLookupResult | null;
+  notice?: string;
   cameraDenied?: boolean;
   cameraUnavailable?: boolean;
 }
@@ -116,24 +119,34 @@ function copyRow(label: string, value: string, opts: { badge?: string } = {}): H
   return row;
 }
 
-function handleParsed(data: VietQRData): void {
+function handleParsed(data: VietQRData, notice?: string): void {
   state.parsed = data;
   state.bank = lookupBin(data.merchantAccount.bankBin);
+  state.notice = notice;
   state.view = "parsed";
   render();
 }
 
 function handleDecode(text: string): void {
-  try {
-    const data = parseVietQR(text);
-    handleParsed(data);
-  } catch (err) {
-    state.view = "error";
-    state.errorMessage =
-      err instanceof VietQRParseError
-        ? "Not a VietQR — try again."
-        : `Couldn't read QR: ${(err as Error).message}`;
-    render();
+  const result: ClassifyResult = classifyQR(text);
+  state.errorDetail = undefined;
+  state.notice = undefined;
+  switch (result.kind) {
+    case "vietqr":
+      handleParsed(result.parsed);
+      return;
+    case "vietqr-card":
+      handleParsed(result.parsed, result.notice);
+      return;
+    case "wallet-via-vietqr":
+      handleParsed(result.parsed, result.notice);
+      return;
+    default:
+      state.view = "error";
+      state.errorMessage = result.message;
+      state.errorDetail = result.detail;
+      render();
+      return;
   }
 }
 
@@ -178,8 +191,10 @@ function reset(): void {
   stopCamera();
   state.view = "scanning";
   state.errorMessage = undefined;
+  state.errorDetail = undefined;
   state.parsed = undefined;
   state.bank = undefined;
+  state.notice = undefined;
   state.cameraDenied = false;
   render();
 }
@@ -233,10 +248,16 @@ function viewScanning(): HTMLElement {
 
 function viewError(): HTMLElement {
   const wrap = el("div", { class: "card" });
-  wrap.appendChild(el("h2", {}, ["Something went wrong"]));
+  wrap.appendChild(el("h2", {}, ["Can't use this QR"]));
   wrap.appendChild(
     el("p", { class: "muted" }, [state.errorMessage ?? "Unknown error."]),
   );
+  if (state.errorDetail) {
+    const details = el("details", { class: "tech-detail" });
+    details.appendChild(el("summary", {}, ["Technical info"]));
+    details.appendChild(el("pre", { class: "tech-detail__pre" }, [state.errorDetail]));
+    wrap.appendChild(details);
+  }
   const retry = el("button", { class: "btn btn--primary", type: "button" }, [
     "Try again",
   ]);
@@ -292,6 +313,11 @@ function viewParsed(): HTMLElement {
 
   const wrap = el("div", { class: "result" });
   const card = el("div", { class: "card" });
+
+  if (state.notice) {
+    const banner = el("div", { class: "warn-banner" }, [state.notice]);
+    card.appendChild(banner);
+  }
 
   const bank = state.bank;
   const bin = data.merchantAccount.bankBin;
@@ -406,7 +432,7 @@ async function saveImage(): Promise<void> {
   let blob: Blob;
   try {
     blob = await renderRecipientImage({
-      bankName: bank ? `${bank.shortName} (${bank.name})` : `Unknown bank (BIN ${bin})`,
+      bankName: bank ? bank.shortName : `Unknown bank (BIN ${bin})`,
       bic: bank?.bic ?? "—",
       accountNumber: account,
       accountHolder: holder,
