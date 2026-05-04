@@ -17,6 +17,9 @@ interface AppState {
   notice?: string;
   cameraDenied?: boolean;
   cameraUnavailable?: boolean;
+  capturedFrame?: Blob | null;
+  capturedFrameWidth?: number;
+  capturedFrameHeight?: number;
 }
 
 const root = document.querySelector<HTMLDivElement>("#app");
@@ -154,9 +157,16 @@ async function startCamera(videoEl: HTMLVideoElement): Promise<void> {
   try {
     scanner = await startScanner({
       video: videoEl,
-      onDecode: (text) => {
+      onDecode: ({ rawString, frame, frameWidth, frameHeight }) => {
         scanner = null;
-        handleDecode(text);
+        state.capturedFrame = frame;
+        state.capturedFrameWidth = frameWidth;
+        state.capturedFrameHeight = frameHeight;
+        handleDecode(rawString);
+      },
+      onReady: ({ videoWidth, videoHeight, scanBox }) => {
+        // Geometry sanity log; also lets us verify the visual overlay matches.
+        console.debug("[scanner] ready", { videoWidth, videoHeight, scanBox });
       },
       onError: () => {
         // Per-frame errors swallowed.
@@ -196,6 +206,9 @@ function reset(): void {
   state.bank = undefined;
   state.notice = undefined;
   state.cameraDenied = false;
+  state.capturedFrame = null;
+  state.capturedFrameWidth = undefined;
+  state.capturedFrameHeight = undefined;
   render();
 }
 
@@ -208,7 +221,9 @@ function viewScanning(): HTMLElement {
   const overlay = el("div", { class: "scan__overlay" });
   overlay.appendChild(el("div", { class: "scan__box" }));
   overlay.appendChild(
-    el("p", { class: "scan__hint" }, ["Point at a VietQR code"]),
+    el("p", { class: "scan__hint" }, [
+      "Position QR inside the box. Include the full card.",
+    ]),
   );
   wrap.appendChild(overlay);
 
